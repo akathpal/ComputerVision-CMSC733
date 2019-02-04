@@ -1,0 +1,6 @@
+model_checkpoint_path: "19model.ckpt"
+all_model_checkpoint_paths: "19a400model.ckpt"
+all_model_checkpoint_paths: "19a500model.ckpt"
+all_model_checkpoint_paths: "19a600model.ckpt"
+all_model_checkpoint_paths: "19a700model.ckpt"
+all_model_checkpoint_paths: "19model.ckpt"
