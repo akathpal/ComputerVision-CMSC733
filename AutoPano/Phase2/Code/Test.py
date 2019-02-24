@@ -7,8 +7,8 @@ Homework 0: Alohomora: Phase 2 Starter Code
 
 
 Author(s):
-Nitin J. Sanket (nitinsan@terpmail.umd.edu)
-PhD Candidate in Computer Science,
+Abhishek Kathpal
+M.Eng. Robotics
 University of Maryland, College Park
 """
 
@@ -22,11 +22,10 @@ import cv2
 import os
 import sys
 import glob
-import Misc.ImageUtils as iu
 import random
 from skimage import data, exposure, img_as_float
 import matplotlib.pyplot as plt
-from Network.Network import HomographyModel
+from Network.Network import Supervised_HomographyModel
 from Misc.MiscUtils import *
 import numpy as np
 import time
@@ -42,55 +41,57 @@ from Misc.TFSpatialTransformer import *
 # Don't generate pyc codes
 sys.dont_write_bytecode = True
 
-def SetupAll(BasePath):
-    """
-    Inputs: 
-    BasePath - Path to images
-    Outputs:
-    ImageSize - Size of the Image
-    DataPath - Paths of all images where testing will be run on
-    """   
-    # Image Input Shape
-    ImageSize = [32, 32, 3]
-    DataPath = []
-    NumImages = len(glob.glob(BasePath+'*.jpg'))
-    SkipFactor = 1
-    for count in range(1,NumImages+1,SkipFactor):
-        DataPath.append(BasePath + str(count) + '.jpg')
+def image_data(BasePath):
+    RandIdx = random.randint(1, 1000)
+    # RandIdx = 1
 
-    return ImageSize, DataPath
+    RandImageName = BasePath + str(RandIdx) + '.jpg'   
+    patchSize = 128
+    r = 16
+
+    img_orig = plt.imread(RandImageName)
     
-def ReadImages(ImageSize, DataPath):
-    """
-    Inputs: 
-    ImageSize - Size of the Image
-    DataPath - Paths of all images where testing will be run on
-    Outputs:
-    I1Combined - I1 image after any standardization and/or cropping/resizing to ImageSize
-    I1 - Original I1 image for visualization purposes only
-    """
+
+    if(len(img_orig.shape)==3):
+        img = cv2.cvtColor(img_orig,cv2.COLOR_RGB2GRAY)
+    else:
+        img = img_orig
+
+
+    img=(img-np.mean(img))/255
+
+    if(img.shape[1]-r-patchSize)>r+1 and (img.shape[0]-r-patchSize)>r+1:
+        x = np.random.randint(r, img.shape[1]-r-patchSize)  
+        y = np.random.randint(r, img.shape[0]-r-patchSize)
+    # print(x)
+
+    p1 = (x,y)
+    p2 = (patchSize+x, y)
+    p3 = (patchSize+x, patchSize+y)
+    p4 = (x, patchSize+y)
+    src = [p1, p2, p3, p4]
+    src = np.array(src)
+    dst = []
+    for pt in src:
+        dst.append((pt[0]+np.random.randint(-r, r), pt[1]+np.random.randint(-r, r)))
+
     
-    ImageName = DataPath
+
+    H = cv2.getPerspectiveTransform(np.float32(src), np.float32(dst))
+    H_inv = np.linalg.inv(H)
+    warpImg = cv2.warpPerspective(img, H_inv, (img.shape[1],img.shape[0]))
+
+    patch1 = img[y:y + patchSize, x:x + patchSize]
+    patch2 = warpImg[y:y + patchSize, x:x + patchSize]
+
+    imgData = np.dstack((patch1, patch2))
+    hData = np.subtract(np.array(dst), np.array(src))
     
-    I1 = cv2.imread(ImageName)
-    
-    if(I1 is None):
-        # OpenCV returns empty list if image is not read! 
-        print('ERROR: Image I1 cannot be read')
-        sys.exit()
-        
-    ##########################################################################
-    # Add any standardization or cropping/resizing if used in Training here!
-    ##########################################################################
+    return imgData,hData,np.array(src),np.array(dst),img_orig
 
-    I1S = iu.StandardizeInputs(np.float32(I1))
+            
 
-    I1Combined = np.expand_dims(I1S, axis=0)
-
-    return I1Combined, I1
-                
-
-def TestOperation(ImgPH, ImageSize, ModelPath, DataPath, LabelsPathPred):
+def TestOperation(ImgPH, ImageSize, ModelPath, BasePath):
     """
     Inputs: 
     ImgPH is the Input Image placeholder
@@ -101,49 +102,33 @@ def TestOperation(ImgPH, ImageSize, ModelPath, DataPath, LabelsPathPred):
     Outputs:
     Predictions written to ./TxtFiles/PredOut.txt
     """
-    Length = ImageSize[0]
-    # Predict output with forward pass, MiniBatchSize for Test is 1
-    _, prSoftMaxS = CIFAR10Model(ImgPH, ImageSize, 1)
+    imgData,hData,src,dst,img = image_data(BasePath)
 
-    # Setup Saver
+    H4pt = Supervised_HomographyModel(ImgPH, ImageSize, 1)
     Saver = tf.train.Saver()
-
-    
+  
     with tf.Session() as sess:
         Saver.restore(sess, ModelPath)
         print('Number of parameters in this model are %d ' % np.sum([np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()]))
         
-        OutSaveT = open(LabelsPathPred, 'w')
-
-        for count in tqdm(range(np.size(DataPath))):            
-            DataPathNow = DataPath[count]
-            Img, ImgOrg = ReadImages(ImageSize, DataPathNow)
-            FeedDict = {ImgPH: Img}
-            PredT = np.argmax(sess.run(prSoftMaxS, FeedDict))
-
-            OutSaveT.write(str(PredT)+'\n')
-            
-        OutSaveT.close()
-
-
-def ReadLabels(LabelsPathTest, LabelsPathPred):
-    if(not (os.path.isfile(LabelsPathTest))):
-        print('ERROR: Test Labels do not exist in '+LabelsPathTest)
-        sys.exit()
-    else:
-        LabelTest = open(LabelsPathTest, 'r')
-        LabelTest = LabelTest.read()
-        LabelTest = map(float, LabelTest.split())
-
-    if(not (os.path.isfile(LabelsPathPred))):
-        print('ERROR: Pred Labels do not exist in '+LabelsPathPred)
-        sys.exit()
-    else:
-        LabelPred = open(LabelsPathPred, 'r')
-        LabelPred = LabelPred.read()
-        LabelPred = map(float, LabelPred.split())
+    
+        imgData=np.array(imgData).reshape(1,128,128,2)
         
-    return LabelTest, LabelPred
+        FeedDict = {ImgPH: imgData}
+        Predicted = sess.run(H4pt,FeedDict)
+        
+    src_new=src+Predicted.reshape(4,2)
+    H4pt_new=dst-src_new
+    
+    cv2.polylines(img,np.int32([src]),True,(0,255,0), 3)
+    cv2.polylines(img,np.int32([dst]),True,(255,0,0), 5)
+    cv2.polylines(img,np.int32([src_new]),True,(0,0,255), 5)
+    plt.figure()
+    plt.imshow(img)
+    plt.show()
+    cv2.imwrite('Final_Output'+'.png',img)
+
+
 
         
 def main():
@@ -156,26 +141,20 @@ def main():
 
     # Parse Command Line arguments
     Parser = argparse.ArgumentParser()
-    Parser.add_argument('--ModelPath', dest='ModelPath', default='/home/chahatdeep/Downloads/Checkpoints/144model.ckpt', help='Path to load latest model from, Default:ModelPath')
-    Parser.add_argument('--BasePath', dest='BasePath', default='/home/chahatdeep/Downloads/aa/CMSC733HW0/CIFAR10/Test/', help='Path to load images from, Default:BasePath')
-    Parser.add_argument('--LabelsPath', dest='LabelsPath', default='./TxtFiles/LabelsTest.txt', help='Path of labels file, Default:./TxtFiles/LabelsTest.txt')
+    Parser.add_argument('--ModelPath', dest='ModelPath', default='../Checkpoints/49a0model.ckpt', help='Path to load latest model from, Default:ModelPath')
+    Parser.add_argument('--BasePath', dest='BasePath', default='../Data/Val/', help='Path to load images from, Default:BasePath')
+    
     Args = Parser.parse_args()
     ModelPath = Args.ModelPath
     BasePath = Args.BasePath
-    LabelsPath = Args.LabelsPath
 
-    # Setup all needed parameters including file reading
-    ImageSize, DataPath = SetupAll(BasePath)
-
+    ImageSize = [1,128,128,2]
+ 
     # Define PlaceHolder variables for Input and Predicted output
-    ImgPH = tf.placeholder('float', shape=(1, ImageSize[0], ImageSize[1], 3))
-    LabelsPathPred = './TxtFiles/PredOut.txt' # Path to save predicted labels
+    ImgPH=tf.placeholder(tf.float32, shape=(1, 128, 128, 2))
 
-    TestOperation(ImgPH, ImageSize, ModelPath, DataPath, LabelsPathPred)
+    TestOperation(ImgPH, ImageSize, ModelPath, BasePath)
 
-    # Plot Confusion Matrix
-    LabelsTrue, LabelsPred = ReadLabels(LabelsPath, LabelsPathPred)
-    ConfusionMatrix(LabelsTrue, LabelsPred)
      
 if __name__ == '__main__':
     main()

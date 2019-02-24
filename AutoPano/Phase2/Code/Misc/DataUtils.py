@@ -38,8 +38,9 @@ def SetupAll(BasePath, CheckPointPath):
     DirNamesTrain =  SetupDirNames(BasePath)
 
     # Read and Setup Labels
-    LabelsPathTrain = './TxtFiles/LabelsTrain.txt'
-    TrainLabels = ReadLabels(LabelsPathTrain)
+    # LabelsPathTrain = './TxtFiles/LabelsTrain.txt'
+    # TrainLabels = ReadLabels(LabelsPathTrain)
+    TrainLabels = []
 
     # If CheckPointPath doesn't exist make the path
     if(not (os.path.isdir(CheckPointPath))):
@@ -51,11 +52,11 @@ def SetupAll(BasePath, CheckPointPath):
     NumTestRunsPerEpoch = 5
     
     # Image Input Shape
-    ImageSize = [32, 32, 3]
+    ImageSize = [128, 128, 3]
     NumTrainSamples = len(DirNamesTrain)
 
     # Number of classes
-    NumClasses = 10
+    NumClasses = 8
 
     return DirNamesTrain, SaveCheckPoint, ImageSize, NumTrainSamples, TrainLabels, NumClasses
 

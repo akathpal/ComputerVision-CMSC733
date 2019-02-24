@@ -12,17 +12,24 @@ University of Maryland, College Park
 """
 
 # Python libraries 
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import math
 from skimage.feature import peak_local_max
 import random 
+from glob import glob
 
-def harris_corner(img):
+def harris_corner(img,Feature="mineig"):
     img_temp = img.copy()
     gray_img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    Rs = cv2.cornerHarris(gray_img,2,3,k=0.04)
+    if Feature == "mineig":
+        Rs = cv2.cornerMinEigenVal(gray_img,2,3)
+    else:
+        Rs = cv2.cornerHarris(gray_img,2,3,k=0.04)
+
+    
     t = Rs<0.01*Rs.max()
     m = Rs>0.01*Rs.max()
     Rs[t] = 0
@@ -31,13 +38,14 @@ def harris_corner(img):
     
     return img_temp,Rs,corners
 
-def anms(Cmap,corners,image,n_best=50):
+def anms(Cmap,corners,image,n_best=100):
     img = image.copy()
     C = Cmap.copy()
     locmax = peak_local_max(C,min_distance=10)
 
     n_strong = locmax.shape[0]
     print(n_strong)
+
     r = [np.Infinity for i in range(n_strong)]
     x=np.zeros((n_strong,1))
     y=np.zeros((n_strong,1))
@@ -62,6 +70,20 @@ def anms(Cmap,corners,image,n_best=50):
            
     return x_best,y_best,img
 
+def corner_detect_with_ANMS(img,n=500):   
+    gray_img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    corners = cv2.goodFeaturesToTrack(gray_img,n,0.01,10)
+    corners = np.int0(corners)
+    img_temp = img.copy()
+    x_best = []
+    y_best = []
+    for i in corners:
+        x,y = i.ravel()
+        cv2.circle(img_temp,(x,y),3,255,-1)
+        x_best.append(y)
+        y_best.append(x)
+    return x_best,y_best,img_temp,corners
+
 def feature_des(img,x_best,y_best):
     gray_img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     top = 40
@@ -79,6 +101,10 @@ def feature_des(img,x_best,y_best):
         std = np.std(feature)
         feature = (feature - mean)/std
         features.append(feature)
+        # plt.figure(figsize=(15,15))
+        # plt.imshow(patch,cmap='gray')
+        # plt.show()
+
     return features,patch
 
 def feature_match(features1,features2,x1,y1,x2,y2,img1,img2):
@@ -92,7 +118,7 @@ def feature_match(features1,features2,x1,y1,x2,y2,img1,img2):
     good = []
     c=0
     for m in rawMatches:
-        if len(m) == 2 and m[0].distance < m[1].distance * 0.80:
+        if len(m) == 2 and m[0].distance < m[1].distance * 0.75:
             matches.append((m[0].trainIdx, m[0].queryIdx))
             good.append([m[0]])
             c = c+1
@@ -133,18 +159,18 @@ def feature_match(features1,features2,x1,y1,x2,y2,img1,img2):
     pts2f = np.float32(np.reshape(pts2f,(len(pts2f),2)))
     pts1t = np.float32(np.reshape(pts1t,(len(pts1t),2)))
     pts2t = np.float32(np.reshape(pts2t,(len(pts2t),2)))
-
-    plt.figure(figsize=(15,15))
-    plt.imshow(img)
-    plt.show()
+    
+    # plt.figure(figsize=(15,15))
+    # plt.imshow(img)
+    # plt.show()
 
     return pts1f,pts2f,pts1t,pts2t
 
-def ransac(pts1, pts2, N=10, t=0.95, thresh=60.0):
+def ransac(pts1, pts2, N=100, t=0.9, thresh=30):
 
     H_new = np.zeros((3,3))
     max_inliers = 0
-    
+    print(len(pts1))
     for j in range(N):
 
         index = []
@@ -157,11 +183,19 @@ def ransac(pts1, pts2, N=10, t=0.95, thresh=60.0):
             source = pts1[ind]
             target = np.array([pts2[ind][0],pts2[ind][1]])
             predict = np.dot(H, np.array([source[0],source[1],1]))
-            predict_x = predict[0]/predict[2]
-            predict_y = predict[1]/predict[2]
+            if predict[2] != 0:
+                predict_x = predict[0]/predict[2]
+                predict_y = predict[1]/predict[2]
+            else:
+                predict_x = predict[0]/0.000001
+                predict_y = predict[1]/0.000001
+
             predict = np.array([predict_x,predict_y])
             predict = np.float32([point for point in predict])
-            if np.linalg.norm(target-predict) < thresh:
+
+            a = np.linalg.norm(target-predict)
+            # e = (a - np.mean(a)) / np.std(a)
+            if a < thresh:
                 inLiers += 1
                 index.append(ind)
 
@@ -174,6 +208,7 @@ def ransac(pts1, pts2, N=10, t=0.95, thresh=60.0):
 
 ## 3rd party code for blending images
 def warpTwoImages(img1, img2, H):
+
     '''warp img2 to img1 with homograph H'''
     h1,w1 = img1.shape[:2]
     h2,w2 = img2.shape[:2]
@@ -185,118 +220,168 @@ def warpTwoImages(img1, img2, H):
     [xmax, ymax] = np.int32(pts.max(axis=0).ravel() + 0.5)
     t = [-xmin,-ymin]
     Ht = np.array([[1,0,t[0]],[0,1,t[1]],[0,0,1]]) # translate
-
     result = cv2.warpPerspective(img2, Ht.dot(H), (xmax-xmin, ymax-ymin))
     result[t[1]:h1+t[1],t[0]:w1+t[0]] = img1
+
     return result
 
 
-def autopano(img1,img2):
+def autopano(img1,img2,Feature="mineig"):
 
-	"""
-	Corner Detection
-	Save Corner detection output as corners.png
-	"""
-	img1_corner,map1,corners1 = harris_corner(img1)
-	img2_corner,map2,corners2 = harris_corner(img2)
+    """
+    Corner Detection
+    Save Corner detection output as corners.png
+    """
+    img1 = cv2.GaussianBlur(img1,(3,3),0)
+    img2 = cv2.GaussianBlur(img2,(3,3),0)
 
-	"""
-	Perform ANMS: Adaptive Non-Maximal Suppression
-	Save ANMS output as anms.png
-	"""
-	x1,y1,img1_corner = anms(map1,corners1,img1)
-	x2,y2,img2_corner = anms(map2,corners2,img2)
+    if Feature == "harris" or Feature == "mineig":
+        img1_corner,map1,corners1 = harris_corner(img1,Feature)
+        img2_corner,map2,corners2 = harris_corner(img2,Feature)
 
-	x1 = np.int0(x1.reshape(1,len(x1)))[0]
-	x2 = np.int0(x2.reshape(1,len(x2)))[0]
-	y1 = np.int0(y1.reshape(1,len(y1)))[0]
-	y2 = np.int0(y2.reshape(1,len(y2)))[0]
+        locmax1 = peak_local_max(map1,min_distance=10)
+        n_strong1 = locmax1.shape[0]
+        locmax2 = peak_local_max(map2,min_distance=10)
+        n_strong2 = locmax2.shape[0]
+        n_best = min(n_strong1,n_strong2)
 
-	plt.figure(figsize=(15,15))
-	plt.subplot(121)
-	plt.axis('off')
-	plt.imshow(img1_corner)
-	plt.subplot(122)
-	plt.axis('off')
-	plt.imshow(img2_corner)
-	plt.show()
+        # plt.figure(figsize=(15,15))
+        # plt.subplot(121)
+        # plt.axis('off')
+        # plt.imshow(img1_corner)
+        # plt.subplot(122)
+        # plt.axis('off')
+        # plt.imshow(img2_corner)
+        # plt.show()
 
-	"""
-	Feature Descriptors
-	Save Feature Descriptor output as FD.png
-	"""
-	features1,patch1 = feature_des(img1,x1,y1)
-	features2,patch2 = feature_des(img2,x2,y2)
+        """
+        Perform ANMS: Adaptive Non-Maximal Suppression
+        Save ANMS output as anms.png
+        """
+        num = min(n_best,100)
+        print("Number of best corners: "+str(num))
+        x1,y1,img1_corner = anms(map1,corners1,img1,num)
+        x2,y2,img2_corner = anms(map2,corners2,img2,num)
 
-	"""
-	Feature Matching
-	Save Feature Matching output as matching.png
-	"""
-	pts1f,pts2f,pts1t,pts2t = feature_match(features1,features2,x1,y1,x2,y2,img1,img2)
+        x1 = np.int0(x1.reshape(1,len(x1)))[0]
+        x2 = np.int0(x2.reshape(1,len(x2)))[0]
+        y1 = np.int0(y1.reshape(1,len(y1)))[0]
+        y2 = np.int0(y2.reshape(1,len(y2)))[0]
 
-	"""
-	Refine: RANSAC, Estimate Homography
-	"""
-	H,index = ransac(pts1t,pts2t)
-	print(len(index))
-	pts1n = []
-	pts2n = []
-	x1n=[]
-	x2n=[]
-	y1n=[]
-	y2n=[]
-	for i in index:
-	    pts1n.append(pts1f[i])
-	    x1n.append(np.int0(pts1f[i][0]))
-	    y1n.append(np.int0(pts1f[i][1]))
-	    pts2n.append(pts2f[i])
-	    x2n.append(np.int0(pts2f[i][0]))
-	    y2n.append(np.int0(pts2f[i][1]))
-	    
-	H = np.float64([pt for pt in H])
-	features1,patch1 = feature_des(img1,x1n,y1n)
-	features2,patch2 = feature_des(img2,x2n,y2n)
-	_,_,_,_ = feature_match(features1,features2,x1n,y1n,x2n,y2n,img1,img2)
-	result = cv2.warpPerspective(img1, H,(img1.shape[1], img1.shape[0]))
-	plt.figure(figsize=(15,15))
-	plt.autoscale(True)
-	plt.imshow(result)
-	plt.show()
+    else:
+        print("Good Features to track")
+        x1,y1,img1_corner,corners1 = corner_detect_with_ANMS(img1)
+        x2,y2,img2_corner,corners2 = corner_detect_with_ANMS(img2)
 
-	"""
-	Image Warping + Blending
-	Save Panorama output as mypano.png
-	"""
-	result = warpTwoImages(img2, img1, H)
-	plt.figure()
-	plt.imshow(result)
-	plt.show()
 
-	return result
+    
+
+    # plt.figure(figsize=(15,15))
+    # plt.subplot(121)
+    # plt.axis('off')
+    # plt.imshow(img1_corner)
+    # plt.subplot(122)
+    # plt.axis('off')
+    # plt.imshow(img2_corner)
+    # plt.show()
+
+    """
+    Feature Descriptors
+    Save Feature Descriptor output as FD.png
+    """
+    features1,patch1 = feature_des(img1,x1,y1)
+    features2,patch2 = feature_des(img2,x2,y2)
+
+    """
+    Feature Matching
+    Save Feature Matching output as matching.png
+    """
+    pts1f,pts2f,pts1t,pts2t = feature_match(features1,features2,x1,y1,x2,y2,img1,img2)
+
+    """
+    Refine: RANSAC, Estimate Homography
+    """
+    # print(len(pts1t))
+    H,index = ransac(pts1t,pts2t)
+    # print(len(index))
+    pts1n = []
+    pts2n = []
+    x1n=[]
+    x2n=[]
+    y1n=[]
+    y2n=[]
+    for i in index:
+        pts1n.append(pts1f[i])
+        x1n.append(np.int0(pts1f[i][0]))
+        y1n.append(np.int0(pts1f[i][1]))
+        pts2n.append(pts2f[i])
+        x2n.append(np.int0(pts2f[i][0]))
+        y2n.append(np.int0(pts2f[i][1]))
+
+
+       
+    H = np.float64([pt for pt in H])
+    features1,patch1 = feature_des(img1,x1n,y1n)
+    features2,patch2 = feature_des(img2,x2n,y2n)
+    _,_,_,_ = feature_match(features1,features2,x1n,y1n,x2n,y2n,img1,img2)
+    result = cv2.warpPerspective(img1, H,(img1.shape[1], img1.shape[0]))
+    # plt.figure(figsize=(15,15))
+    # plt.autoscale(True)
+    # plt.imshow(result)
+    # plt.show()
+
+    """
+    Image Warping + Blending
+    Save Panorama output as mypano.png
+    """
+    result = warpTwoImages(img2, img1, H)
+    plt.figure()
+    plt.imshow(result)
+    plt.show()
+    cv2.imwrite('Final_Output'+'.png',result)
+
+    return result
 
 def main():
-	# Add any Command Line arguments here
-    # Parser = argparse.ArgumentParser()
-    # Parser.add_argument('--NumFeatures', default=100, help='Number of best features to extract from each image, Default:100')
+    # Add any Command Line arguments here
+    Parser = argparse.ArgumentParser()
+    Parser.add_argument('--BasePath', default="../Data/Train/Set1", help='Folder of Test Images')
+    Parser.add_argument('--Features',default="good",help='good or harris or mineig')
+
+    Args = Parser.parse_args()
+    BasePath = Args.BasePath
+    Feature = Args.Features
+
+    path = str(BasePath) + str("/*.jpg")
+
+    """
+    Read a set of images for Panorama stitching
+    """
     
-    # Args = Parser.parse_args()
-    # NumFeatures = Args.NumFeatures
+    ind = sorted(glob(path))
+    
+    img = []
+    for i in ind:
+        img.append(plt.imread(i))
 
-	"""
-	Read a set of images for Panorama stitching
-	"""
-	path = '../Data/Train/Set1/'
-	img1 = plt.imread(path+'1.jpg')
-	img2 = plt.imread(path+'2.jpg')
-	img3 = plt.imread(path+'3.jpg')
+    
+    # res = []
+    # for i in range(0,len(img)-1,2):
+    #     res.append(autopano(img[i],img[i+1],Feature))
+    # if len(img)%2 != 0:
+    #     res.append(img[len(img)-1])
+    # for i in range(len(res)-1):
+    #     res[i+1] = autopano(res[i],res[i+1])
 
-	res = autopano(img1,img2)
-	final = autopano(img2,img3)
-	result = autopano(res, final)
-	plt.figure()
-	plt.imshow(result)
-	plt.show()
-	
+    for i in range(0,len(img)-1):
+        img[i+1] = autopano(img[i],img[i+1],Feature)
+    # res = autopano(img1,img2)
+    # final = autopano(img2,img3)
+    # result = autopano(res, img3)
+    # plt.figure()
+    # plt.imshow(result)
+    # plt.show()
+
     
 if __name__ == '__main__':
     main()
