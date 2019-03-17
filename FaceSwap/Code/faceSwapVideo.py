@@ -357,11 +357,16 @@ if __name__ == '__main__' :
     # points2 = features(img2);
 
     cap = cv2.VideoCapture("../Images/1.mp4")
-    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+    ret,img2 = cap.read()
+    height = img2.shape[0]
+    width = img2.shape[1]
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    t=1
+    out = cv2.VideoWriter('output-{}.avi'.format(t),fourcc, 20, (width,height))
     # Define the codec and create VideoWriter object
     # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
-    out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (640,480))
+    # out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (640,480))
 
     while(cap.isOpened()):
 

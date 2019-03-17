@@ -183,7 +183,7 @@ def estimate_params(points2,points1_d):
     
     A = np.hstack((P.transpose(),np.zeros((3,3))))
     B = np.hstack((K,P))
-    C = np.vstack((A,B))
+    C = np.vstack((B,A))
     lamda = 0.0000001
 
     T = np.linalg.inv(C + lamda*np.identity(p+3))
@@ -201,7 +201,7 @@ def estimate_params(points2,points1_d):
 
 
 
-def TPS(img1,img2,points1,points2):
+def TPS(img1,img2,points1,points2,hull2):
 
     points1 = np.asarray(points1)
     points2 = np.asarray(points2)
@@ -211,7 +211,13 @@ def TPS(img1,img2,points1,points2):
 
     r = cv2.boundingRect(np.float32([points2]))
     mask = np.zeros((r[3], r[2], 3), dtype = np.float32)
-    cv2.fillConvexPoly(mask, np.int32(points2), (1.0, 1.0, 1.0), 16, 0);
+
+    points2_t = []
+
+    for i in xrange(len(hull2)):
+        points2_t.append(((hull2[i][0]-r[0]),(hull2[i][1]-r[1])))
+
+    cv2.fillConvexPoly(mask, np.int32(points2_t), (1.0, 1.0, 1.0), 16, 0);
     cv2.imshow("Mask",mask)
     cv2.waitKey(2000)
     cv2.destroyAllWindows()
@@ -236,20 +242,31 @@ def TPS(img1,img2,points1,points2):
         for j in xrange(warped_img.shape[0]):
             t = 0
             l = 0
-            b = [i,j]
+            n = i+r[0]
+            m = j+ r[1]
+            b = [n,m]
             for k in xrange(p):
                 a = points2[k,:]
                 t = t+x_params[k]*U(np.linalg.norm((a-b)))
                 l = l+y_params[k]*U(np.linalg.norm((a-b)))
 
-            x = a1_x + ax_x*i + ay_x*j + t
-            y = a1_y + ax_y*i + ay_y*j + l
+            x = a1_x + ax_x*n + ay_x*m + t
+            y = a1_y + ax_y*n + ay_y*m + l
 
-            print(count)
-            print(x,y)
+            # print(count)
+            # print(x,y)
             count += 1
+            x = int(x)
+            y = int(y)
+            x = min(max(x, 0), img1.shape[1] - 1)
+            y = min(max(y, 0), img1.shape[0] - 1)
 
-            warped_img[j,i] = img1[y,x]
+            warped_img[j,i] = img1[y,x,:]
+
+    cv2.imshow("warped_img",warped_img)
+    cv2.waitKey(5000)
+    cv2.destroyAllWindows()
+
 
 
     warped_img = warped_img * mask
@@ -346,8 +363,8 @@ def warpTriangle(img1, img2, t1, t2) :
     
     size = (r2[2], r2[3])
 
-    img2Rect = applyAffineTransform(img1Rect, t1Rect, t2Rect, size)
-    # img2Rect = applyTransform(img1Rect, t1Rect, t2Rect, size)
+    # img2Rect = applyAffineTransform(img1Rect, t1Rect, t2Rect, size)
+    img2Rect = applyTransform(img1Rect, t1Rect, t2Rect, size)
 
     # print("img2rect shape =  "+str(img2Rect.shape))
     
@@ -370,10 +387,16 @@ if __name__ == '__main__' :
     
     img1 = cv2.imread(filename1);
     img2 = cv2.imread(filename2);
+
+    img1 = cv2.resize(img1,(320,240))
+    img2 = cv2.resize(img2,(320,240))
     img1Warped = np.copy(img2);
 
     points1 = features(img1);
     points2 = features(img2);
+
+    if len(points2)==0 or len(points1)==0:
+        exit()
 
     # Find convex hull
     hull1 = []
@@ -390,7 +413,7 @@ if __name__ == '__main__' :
 
     if(t==1):
 
-        img1warped = TPS(img1,img1Warped,hull1,hull2)
+        img1warped = TPS(img1,img1Warped,points1,points2,hull2)
         
         cv2.imshow("Face Warped", img1warped)
         cv2.waitKey(2000)
