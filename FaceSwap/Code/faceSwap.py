@@ -176,7 +176,7 @@ def estimate_params(points2,points1_d):
         for j in xrange(p):
             a = points2[i,:]
             b = points2[j,:]
-            K[i,j] = U(np.linalg.norm((a-b),ord=1))
+            K[i,j] = U(np.linalg.norm((a-b)))
 
     P = np.hstack((points2,np.ones((p,1))))
     # print("here")
@@ -205,39 +205,59 @@ def TPS(img1,img2,points1,points2):
 
     points1 = np.asarray(points1)
     points2 = np.asarray(points2)
+    p = len(points1)
 
+    print(p)
+
+    r = cv2.boundingRect(np.float32([points2]))
+    mask = np.zeros((r[3], r[2], 3), dtype = np.float32)
+    cv2.fillConvexPoly(mask, np.int32(points2), (1.0, 1.0, 1.0), 16, 0);
+    cv2.imshow("Mask",mask)
+    cv2.waitKey(2000)
+    cv2.destroyAllWindows()
     # print(points1[:,0])
 
     x_params = estimate_params(points2,points1[:,0])
     y_params = estimate_params(points2,points1[:,1])
 
-    p = len(points1)
+    a1_x = x_params[p+2]
+    ay_x = x_params[p+1]
+    ax_x = x_params[p]
 
-    K = np.zeros((p,p), np.float32)
-    P = np.zeros((p,3), np.float32)
+    a1_y = y_params[p+2]
+    ay_y = y_params[p+1]
+    ax_y = y_params[p]
 
-    
-    for i in xrange(p):
-        for j in xrange(p):
-            a = points1[i,:]
-            b = points1[j,:]
-            K[i,j] = U(np.linalg.norm((a-b),ord=1))
+    # print(img1.shape)
+    warped_img = np.copy(mask)
+    count = 0
+    print(warped_img.shape)
+    for i in xrange(warped_img.shape[1]):
+        for j in xrange(warped_img.shape[0]):
+            t = 0
+            l = 0
+            b = [i,j]
+            for k in xrange(p):
+                a = points2[k,:]
+                t = t+x_params[k]*U(np.linalg.norm((a-b)))
+                l = l+y_params[k]*U(np.linalg.norm((a-b)))
 
-    P = np.hstack((points1,np.ones((p,1))))
-    # print("here")
-    
-    A = np.hstack((P.transpose(),np.zeros((3,3))))
-    B = np.hstack((K,P))
-    C = np.vstack((A,B))
+            x = a1_x + ax_x*i + ay_x*j + t
+            y = a1_y + ax_y*i + ay_y*j + l
 
-    # print(x_params.shape)
-    Ax = np.matmul(C,x_params)
-    print(Ax)
-    Ay = np.matmul(C,y_params)
+            print(count)
+            print(x,y)
+            count += 1
 
-    warped_img = []
+            warped_img[j,i] = img1[y,x]
 
-    return warped_img
+
+    warped_img = warped_img * mask
+
+    img2[r[1]:r[1]+r[3], r[0]:r[0]+r[2]] = img2[r[1]:r[1]+r[3], r[0]:r[0]+r[2]] * ( (1.0, 1.0, 1.0) - mask )
+    img2[r[1]:r[1]+r[3], r[0]:r[0]+r[2]] = img2[r[1]:r[1]+r[3], r[0]:r[0]+r[2]] + warped_img
+
+    return img2
 
      
 
@@ -326,8 +346,8 @@ def warpTriangle(img1, img2, t1, t2) :
     
     size = (r2[2], r2[3])
 
-    # img2Rect = applyAffineTransform(img1Rect, t1Rect, t2Rect, size)
-    img2Rect = applyTransform(img1Rect, t1Rect, t2Rect, size)
+    img2Rect = applyAffineTransform(img1Rect, t1Rect, t2Rect, size)
+    # img2Rect = applyTransform(img1Rect, t1Rect, t2Rect, size)
 
     # print("img2rect shape =  "+str(img2Rect.shape))
     
@@ -345,8 +365,8 @@ def warpTriangle(img1, img2, t1, t2) :
 if __name__ == '__main__' :
 
     # Read images
-    filename1 = '../Images/chetan.jpg'
-    filename2 = '../Images/yiannis.jpg'
+    filename1 = '../Images/2.jpg'
+    filename2 = '../Images/1.jpg'
     
     img1 = cv2.imread(filename1);
     img2 = cv2.imread(filename2);
@@ -355,8 +375,6 @@ if __name__ == '__main__' :
     points1 = features(img1);
     points2 = features(img2);
 
-    # warped = TPS(img1,img2,points1,points2)    
-    
     # Find convex hull
     hull1 = []
     hull2 = []
@@ -367,33 +385,45 @@ if __name__ == '__main__' :
     for i in xrange(0, len(hullIndex)):
         hull1.append(points1[int(hullIndex[i])])
         hull2.append(points2[int(hullIndex[i])])
-    
-    
-    # Find delanauy traingulation for convex hull points
-    sizeImg2 = img2.shape    
-    rect = (0, 0, sizeImg2[1], sizeImg2[0])
+
+    t=input("Enter Value of t (1 for TPS): ")
+
+    if(t==1):
+
+        img1warped = TPS(img1,img1Warped,hull1,hull2)
+        
+        cv2.imshow("Face Warped", img1warped)
+        cv2.waitKey(2000)
+        cv2.destroyAllWindows() 
+
+    else:   
      
-    dt = calculateDelaunayTriangles(rect, hull2)
-    
-    if len(dt) == 0:
-        quit()
-    
-    # Apply affine transformation to Delaunay triangles
-    for i in xrange(0, len(dt)):
-        t1 = []
-        t2 = []
+        # Find delanauy traingulation for convex hull points
+        sizeImg2 = img2.shape    
+        rect = (0, 0, sizeImg2[1], sizeImg2[0])
+         
+        dt = calculateDelaunayTriangles(rect, hull2)
         
-        #get points for img1, img2 corresponding to the triangles
-        for j in xrange(0, 3):
-            t1.append(hull1[dt[i][j]])
-            t2.append(hull2[dt[i][j]])
+        if len(dt) == 0:
+            quit()
         
-        warpTriangle(img1, img1Warped, t1, t2)
-        # if(i==10):
-        #     break
-    
-    cv2.imshow("Face Warped", img1Warped)
-    cv2.waitKey(100)
+        # Apply affine transformation to Delaunay triangles
+        for i in xrange(0, len(dt)):
+            t1 = []
+            t2 = []
+            
+            #get points for img1, img2 corresponding to the triangles
+            for j in xrange(0, 3):
+                t1.append(hull1[dt[i][j]])
+                t2.append(hull2[dt[i][j]])
+            
+            warpTriangle(img1, img1Warped, t1, t2)
+            # if(i==10):
+            #     break
+        
+        cv2.imshow("Face Warped", img1Warped)
+        cv2.waitKey(2000)
+        cv2.destroyAllWindows()
 
     # Calculate Mask
     hull8U = []
@@ -411,7 +441,7 @@ if __name__ == '__main__' :
     
     # Clone seamlessly.
     output = cv2.seamlessClone(np.uint8(img1Warped), img2, mask, center, cv2.NORMAL_CLONE)
-    
+    cv2.imwrite("output.jpg",output)
     cv2.imshow("Face Swapped", output)
     cv2.waitKey(0)
     
