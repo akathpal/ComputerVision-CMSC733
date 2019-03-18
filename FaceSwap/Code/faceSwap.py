@@ -382,20 +382,21 @@ def warpTriangle(img1, img2, t1, t2) :
 if __name__ == '__main__' :
 
     # Read images
-    filename1 = '../Images/2.jpg'
-    filename2 = '../Images/1.jpg'
+    filename1 = '../Images/t2.jpg'
+    filename2 = '../Images/t1.jpg'
     
     img1 = cv2.imread(filename1);
     img2 = cv2.imread(filename2);
 
-    img1 = cv2.resize(img1,(320,240))
-    img2 = cv2.resize(img2,(320,240))
+    img1 = imutils.resize(img1,width = 320)
+    img2 = imutils.resize(img2,width = 320)
     img1Warped = np.copy(img2);
 
     points1 = features(img1);
     points2 = features(img2);
 
     if len(points2)==0 or len(points1)==0:
+        print("Face Not Detected")
         exit()
 
     # Find convex hull
