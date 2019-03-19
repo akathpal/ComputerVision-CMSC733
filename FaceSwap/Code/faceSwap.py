@@ -430,7 +430,7 @@ if __name__ == '__main__' :
         if(t==1):
 
             img1warped = TPS(img1,img1Warped,points1,points2,hull2)
-            
+            cv2.imwrite("output.jpg",img1Warped)
             cv2.imshow("Face Warped", img1warped)
             cv2.waitKey(2000)
             cv2.destroyAllWindows() 
@@ -458,7 +458,7 @@ if __name__ == '__main__' :
                 
                 warpTriangle(img1, img1Warped, t1, t2)
                
-            
+            cv2.imwrite("output.jpg",img1Warped)
             cv2.imshow("Face Warped", img1Warped)
             cv2.waitKey(2000)
             cv2.destroyAllWindows()
@@ -485,7 +485,7 @@ if __name__ == '__main__' :
         _,output = prnetSwap(prn,img2,img1)
 
 
-    cv2.imwrite("output.jpg",output)
+    # cv2.imwrite("output.jpg",output)
     cv2.imshow("Face Swapped", output)
     cv2.waitKey(0)
     
