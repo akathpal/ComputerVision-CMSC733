@@ -36,7 +36,7 @@ def traditional(img1,img2,points1,points2,method):
 
     if(method=="tps"):
 
-        img1warped = thinPlateSpline(img1,img1Warped,points1,points2,hull2)
+        img1Warped = thinPlateSpline(img1,img1Warped,points1,points2,hull2)
         
         # cv2.imshow("Face Warped", img1warped)
         # cv2.waitKey(2000)
@@ -44,8 +44,10 @@ def traditional(img1,img2,points1,points2,method):
 
     elif(method=="affine" or method=="tri"):
 
-        img1Warped = traingulation(img1,img2,img1Warped,hull1,hull2,method)
+        img1Warped = triangulation(img1,img2,img1Warped,hull1,hull2,method)
 
     output = blending(img1Warped,hull2,img2)
+
+    return output
 
 

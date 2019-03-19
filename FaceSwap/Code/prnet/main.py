@@ -22,7 +22,9 @@ def prnetSwap(prn,image, ref_image):
     [h, w, _] = image.shape
 
     #-- 1. 3d reconstruction -> get texture. 
-    pos = prn.process(image) 
+    pos = prn.process(image)
+    if pos is None:
+        return pos,image 
     vertices = prn.get_vertices(pos)
     image = image/255.
     texture = cv2.remap(image, pos[:,:,:2].astype(np.float32), None, interpolation=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT,borderValue=(0))
@@ -49,4 +51,4 @@ def prnetSwap(prn,image, ref_image):
     center = (int((vis_min[1] + vis_max[1])/2+0.5), int((vis_min[0] + vis_max[0])/2+0.5))
     output = cv2.seamlessClone((new_image*255).astype(np.uint8), (image*255).astype(np.uint8), (face_mask*255).astype(np.uint8), center, cv2.NORMAL_CLONE)
    
-    return output
+    return pos,output

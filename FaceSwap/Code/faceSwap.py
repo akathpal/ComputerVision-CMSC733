@@ -11,6 +11,7 @@ from imutils import face_utils
 from scipy.interpolate import interp2d
 import os
 from prnet.main import prnetSwap
+from prnet.api import PRN
 
 
 # Read points from text file
@@ -173,14 +174,6 @@ def U(r):
 
     return u
 
-# % Inputs:   ctr_pts     N x 2 matrix, each row representing corresponding
-# %                       points position (x, y) in second image
-# %           target_value    N x 1 vector representing corresponding point
-# %                           position x or y in first image
-# % Outputs:  a1          double, TPS parameter
-# %           ax          double, TPS parameter
-# %           ay          double, TPS parameter
-# %           w           N x 1 vector, TPS parameters
 
 def estimate_params(points2,points1_d):
 
@@ -400,8 +393,8 @@ def warpTriangle(img1, img2, t1, t2) :
 if __name__ == '__main__' :
 
     # Read images
-    filename1 = '../Images/t1.jpg'
-    filename2 = '../Images/t2.jpg'
+    filename1 = '../TestSet/Scarlett.jpg'
+    filename2 = '../TestSet/stark.jpg'
     
     img1 = cv2.imread(filename1);
     img2 = cv2.imread(filename2);
@@ -487,7 +480,9 @@ if __name__ == '__main__' :
         # Clone seamlessly.
         output = cv2.seamlessClone(np.uint8(img1Warped), img2, mask, center, cv2.NORMAL_CLONE)   
     else:
-        output = prnetSwap(img1,img2)
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+        prn = PRN(is_dlib = True)
+        _,output = prnetSwap(prn,img2,img1)
 
 
     cv2.imwrite("output.jpg",output)
