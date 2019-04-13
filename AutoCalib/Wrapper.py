@@ -8,7 +8,8 @@ from misc.optimize import optimization
 from misc.params import estimateIntrinsicParams
 from misc.params import estimateExtrinsicParams
 
-from misc.reproject import estimateReprojectionError,estimateReprojectionErrorDistortion,visualizePoints
+from misc.reproject import estimateReprojectionError,estimateReprojectionErrorDistortion
+from misc.reproject import visualizePoints,rectify
 
 
 
@@ -47,7 +48,9 @@ if __name__ == '__main__':
 	
 	visualize = True
 	if visualize:
-		visualizePoints(imgpoints, optpoints, images)
+		visualizePoints(imgpoints, np.asarray(optpoints), images)
+
+	rectified_images = rectify(imgpoints,optpoints,images)
 
 	print("Mean Reprojection error after optimization:",np.mean(err))
 	print("Final Calibration matrix is: ",K_final)

@@ -65,3 +65,15 @@ def visualizePoints(imgpoints, optpoints, images):
 
         cv2.imwrite("Output/reproj_{}.jpg".format(i), img)
 
+
+def rectify(imgpoints,optpoints,images):
+
+	for i,(image, imgpoints, optpoints) in enumerate(zip(images, imgpoints, optpoints)):
+		img = cv2.imread(image)
+		
+		H,_ = cv2.findHomography(imgpoints,np.array(optpoints))
+		img_warp = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
+
+		# cv2.imwrite("Output/rectify_{}.jpg".format(i), img_warp)
+
+
