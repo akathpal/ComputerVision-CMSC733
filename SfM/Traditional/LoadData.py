@@ -1,6 +1,6 @@
 import numpy as np
 
-def loadData(path):
+def loadData(path = "Data/"):
     n_images = 6
     Mx = []
     My = []
@@ -49,7 +49,7 @@ def findCorrespondance(a, b,database_path):
     Returns:
         list: List of matching points: R,G,B,x1,y1,x2,y2
     """
-    
+    matching_list = []
     if (1 <= a <= 6):
         with open(database_path + "matching" + str(a) + ".txt") as f:
             line_no = 1
