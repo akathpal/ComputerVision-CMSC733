@@ -28,8 +28,8 @@ def LinearTriangulation( K, C1, R1, C2, R2, x1, x2 ):
         skew2 = skew(X2[i, :])
         A = np.vstack((np.dot(skew1,P1),np.dot(skew2,P2)))
         _,_,v = np.linalg.svd(A)
-#         x = v[:,-1] / v[-1,-1]
-        x = v[-1,:] / v[-1,-1]
+        # x = v[:,-1] / v[-1,-1]
+        x = v[-1] / v[-1,-1]
         x = np.reshape(x,(len(x),-1))
         X[i,:] = x[0:3].T
 
