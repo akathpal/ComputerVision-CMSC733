@@ -1,14 +1,21 @@
+""" File to implement function to calculate Essential Matrix
+"""
 import numpy as np
+import sys
 
-
-# def get_camera_param():
-#     Cam = np.fromfile('Data/calibration_new.txt', sep=' ')
-#     Cam = Cam.reshape(3, 3)
-#     return(Cam)
+sys.dont_write_bytecode = True
 
 
 def EssentialMatrixFromFundamentalMatrix(F, K):
+    """Calculate essential matrix from Fundamental Matrix
 
+    Args:
+        F (array): Fundamental Matrix
+        K (array): Camera Intrinsic Matrix
+
+    Returns:
+        array: Essential Matrix
+    """
     E = np.dot(K.T, np.dot(F, K))
     U, S, V_T = np.linalg.svd(E)
 

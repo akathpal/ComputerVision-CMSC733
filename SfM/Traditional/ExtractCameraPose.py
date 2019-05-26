@@ -1,11 +1,26 @@
+""" File to implement function for Extracting Camera Pose
+"""
 import numpy as np
+import sys
+
+sys.dont_write_bytecode = True
 
 
 def ExtractCameraPose(E, K):
+    """
+    Args:
+        E (array): Essential Matrix
+        K (array): Intrinsic Matrix
 
-    U,S,V_T = np.linalg.svd(E)
-    W = np.array([[0, -1, 0],[1, 0, 0],[0, 0, 1]])
+    Returns:
+        arrays: set of Rotation and Camera Centers
+    """
+    U, S, V_T = np.linalg.svd(E)
+    W = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
 
+    # print("E svd U", U)
+    # print("E svd S", S)
+    # print("E svd U[:, 2]", U[:, 2])
     R = []
     C = []
     R.append(np.dot(U, np.dot(W, V_T)))
@@ -13,13 +28,13 @@ def ExtractCameraPose(E, K):
     R.append(np.dot(U, np.dot(W.T, V_T)))
     R.append(np.dot(U, np.dot(W.T, V_T)))
     C.append(U[:, 2])
-    C.append(- U[:, 2])
+    C.append(-U[:, 2])
     C.append(U[:, 2])
     C.append(-U[:, 2])
 
     for i in range(4):
-        if(np.linalg.det(R[i]) < 0):
+        if (np.linalg.det(R[i]) < 0):
             R[i] = -R[i]
             C[i] = -C[i]
 
-    return R,C
+    return R, C
